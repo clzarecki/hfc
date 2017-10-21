@@ -16,7 +16,7 @@ final_features = ['GWNO', 'EVENT_DATE', 'YEAR', 'TIME_PRECISION', 'EVENT_TYPE',
 		'ACTOR1', 'ALLY_ACTOR_1', 'INTER1', 'ACTOR2', 'ALLY_ACTOR_2', 'INTER2',
 		'INTERACTION', 'COUNTRY', 'LATITUDE', 'LONGITUDE', 'GEO_PRECISION',
 		'FATALITIES']
-final_features2 = ['GWNO', 'EVENT_DATE', 'YEAR', 'TIME_PRECISION', 'EVENT_TYPE',
+final_features2 = ['EVENT_DATE', 'YEAR', 'TIME_PRECISION', 'EVENT_TYPE',
 		'INTER1', 'INTER2',
 		'INTERACTION', 'COUNTRY', 'LATITUDE', 'LONGITUDE', 'GEO_PRECISION',
 		'FATALITIES']
@@ -28,6 +28,15 @@ def get_feature_names(filename):
 		rest = [row for row in reader]
 	return i
 
+def date_str_to_int(date_str):
+	date_format = '%m/%d/%Y'
+	date = datetime.datetime.strptime(date_str, date_format)
+	year = date.year
+	month = date.month
+	day = date.day
+	date = (year - 1990) * 365 + month * 30 + day
+	return date
+
 def get_features_and_possible_values(filename):
 	#feature_names = get_feature_names(filename)
 	feature_names = final_features2
@@ -38,7 +47,10 @@ def get_features_and_possible_values(filename):
 		reader = csv.DictReader(csvfile)
 		for row in reader:
 			for feat in feature_names:
-				feat_vals[feat].add(row[feat])
+				val = row[feat]
+				if feat == "EVENT_DATE":
+					val = date_str_to_int(val)
+				feat_vals[feat].add(val)
 	
 	# convert set of values to sorted list
 	for feature in feature_names:
@@ -104,27 +116,13 @@ def get_row_normalized(row, features, features_numeric, possible_values,
 		row_normalized_features.extend(feat_normalized)
 	return row_normalized_features
 
-def get_data_normalized(filename):
+def get_normalized_col_names(filename):
 	feat_names, pos_feat_vals = get_features_and_possible_values(filename)
 	feat_numeric = feature_is_numeric(pos_feat_vals)
 	max_vals, min_vals = max_min_vals(pos_feat_vals, feat_numeric)
 	
 	col_names = normalize_feature_names(feat_names, feat_numeric, pos_feat_vals)
-	
-	data = []
-	with open(filename) as csvfile:
-		reader = csv.DictReader(csvfile)
-		num = 0
-		for row in reader:
-			num += 1
-# 			if num == 1:
-# 				print row
-# 			if num % 100 == 0:
-# 				print num
-			row_normalized = get_row_normalized(row, feat_names, feat_numeric,
-					pos_feat_vals, min_vals, max_vals)
-			data.append(row_normalized)
-	return col_names, data
+	return col_names
 
 def row_vals_to_float(row):
 	float_row = {}
@@ -140,7 +138,9 @@ def get_data(filename):
 	data = []
 	with open(filename) as csvfile:
 		reader = csv.DictReader(csvfile)
+		min = 3000
 		for row in reader:
+			row["EVENT_DATE"] = str(date_str_to_int(row["EVENT_DATE"]))
 			data.append(row_vals_to_float(row))
 	return data
 
@@ -155,12 +155,9 @@ def split_by_field(data, field_name):
 	return split_data
 
 def compare_by_date(row1, row2):
-	date_format = '%m/%d/%Y'
 	row1_date = row1['EVENT_DATE']
 	row2_date = row2['EVENT_DATE']
-	utc_time1 = datetime.datetime.strptime(row1_date, date_format)
-	utc_time2 = datetime.datetime.strptime(row2_date, date_format)
-	return int((utc_time1 - utc_time2).total_seconds())
+	return int(row1_date) - int(row2_date)
 
 def get_features(data, index, num_previous):
 	if num_previous > index:
@@ -173,6 +170,22 @@ def get_features(data, index, num_previous):
 	
 	return feature_vals
 
+def split_by_attr(data, labels, attr_index, split_value):
+	below_data = []
+	below_labels = []
+	above_data = []
+	above_labels = []
+	
+	for point, label in zip(data, labels):
+		if point[attr_index] < split_value:
+			below_data.append(point)
+			below_labels.append(label)
+		else:
+			above_data.append(point)
+			above_labels.append(label)
+	
+	return below_data, below_labels, above_data, above_labels
+
 def entropy(labels):
 	# get counts
 	label_choices = list(set(labels))
@@ -184,7 +197,7 @@ def entropy(labels):
 	# calculate entropy
 	entropy = 0
 	for count in label_counts:
-		prob = (count / total_count)
+		prob = float(count) / total_count
 		entropy -= prob * math.log(prob, 2)
 	
 	return entropy
@@ -193,9 +206,19 @@ def find_best_attribute(training_data, svm_classifier):
 	# get label for training points using svm
 	labels = svm_classifier.predict(training_data)
 
-	#for attr_index in range(len(training_data[0])):
+	best_gain = 0
+	best_attr = -1
+	for attr_index in range(len(training_data[0])):
 		# find best information gain
+		part1_data, part1_labels, part2_data, part2_labels = split_by_attr(
+				training_data, labels, attr_index, 0.5)
+		gain = entropy(labels) - ((len(part1_labels) / len(labels)) * entropy(part1_labels) + (len(part2_labels) / len(labels)) + entropy(part2_labels))
 		
+		if gain > best_gain:
+			best_gain = gain
+			best_attr = attr_index
+	
+	return best_attr
 
 def main():
 	filename = "ACLED-All-Africa-File_20170101-to-20170923_csv.csv"
@@ -213,6 +236,7 @@ def main():
 	feat_numeric = feature_is_numeric(pos_feat_vals)
 	max_vals, min_vals = max_min_vals(pos_feat_vals, feat_numeric)
 	
+	column_names = get_normalized_col_names(filename)
 	data_normalized = {}
 	for country, rows in data.iteritems():
 		country_rows_normalized = []
@@ -225,14 +249,14 @@ def main():
 	print("Preparing training data...")
 	training_data = []
 	training_labels = []
-	num_previous = 3
+	num_previous = 0
 	for country, rows in data_normalized.iteritems():
 		for index in range(num_previous, len(rows)):
 			training_point = get_features(rows, index, num_previous)
 			label = min(1, data[country][index]['FATALITIES'])
 			training_data.append(training_point)
 			training_labels.append(label)
-
+	#print(len(training_data[0]))
 	print("Training classifier...")
 	start = time.time()
 	clf = svm.LinearSVC()
@@ -241,7 +265,9 @@ def main():
 	#print("Time to train classifier: " + str(end - start) + " seconds")
 
 	print("Building tree from SVM classifier...")
-	find_best_attribute(training_data, clf)
+	#print(len(column_names))
+	attr = find_best_attribute(training_data, clf)
+	print(column_names[attr])
 
 if __name__ == '__main__':
 	main()

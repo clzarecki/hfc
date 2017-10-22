@@ -202,13 +202,16 @@ def entropy(labels):
 	
 	return entropy
 
-def find_best_attribute(training_data, svm_classifier):
+def find_best_attribute(training_data, svm_classifier, invalid_attrs):
 	# get label for training points using svm
 	labels = svm_classifier.predict(training_data)
 
 	best_gain = 0
 	best_attr = -1
 	for attr_index in range(len(training_data[0])):
+		if attr_index in invalid_attrs:
+			continue
+		
 		# find best information gain
 		part1_data, part1_labels, part2_data, part2_labels = split_by_attr(
 				training_data, labels, attr_index, 0.5)
@@ -249,25 +252,27 @@ def main():
 	print("Preparing training data...")
 	training_data = []
 	training_labels = []
-	num_previous = 0
+	num_previous = 1
 	for country, rows in data_normalized.iteritems():
 		for index in range(num_previous, len(rows)):
 			training_point = get_features(rows, index, num_previous)
 			label = min(1, data[country][index]['FATALITIES'])
 			training_data.append(training_point)
 			training_labels.append(label)
-	#print(len(training_data[0]))
+
 	print("Training classifier...")
-	start = time.time()
 	clf = svm.LinearSVC()
 	clf.fit(training_data, training_labels)
-	end = time.time()
-	#print("Time to train classifier: " + str(end - start) + " seconds")
 
 	print("Building tree from SVM classifier...")
-	#print(len(column_names))
-	attr = find_best_attribute(training_data, clf)
-	print(column_names[attr])
+	invalid_attrs = set(range(18,65))
+	num_attrs = len(column_names)
+	for n in range(num_previous):
+		invalid_attrs |= set(range(num_attrs * (n+1) + 18, num_attrs * (n+1) + 65))
+	invalid_attrs |= set(range(num_previous * num_attrs, (num_previous + 1) * num_attrs))
+	
+	attr = find_best_attribute(training_data, clf, invalid_attrs)
+	print(str(attr // num_attrs) + " " + column_names[attr % num_attrs])
 
 if __name__ == '__main__':
 	main()

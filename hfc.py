@@ -1,9 +1,10 @@
 import csv
 import datetime
+import graphviz
 import math
 import numpy as np
 import re
-from sklearn import svm
+from sklearn import svm, tree
 import time
 
 all_features = ['GWNO', 'EVENT_ID_CNTY', 'EVENT_ID_NO_CNTY', 'EVENT_DATE',
@@ -165,7 +166,7 @@ def get_features(data, index, num_previous):
 	
 	feature_vals = []
 	
-	for add_index in range(index - num_previous, index + 1):
+	for add_index in range(index - num_previous, index):
 		feature_vals += data[add_index]
 	
 	return feature_vals
@@ -215,13 +216,24 @@ def find_best_attribute(training_data, svm_classifier, invalid_attrs):
 		# find best information gain
 		part1_data, part1_labels, part2_data, part2_labels = split_by_attr(
 				training_data, labels, attr_index, 0.5)
-		gain = entropy(labels) - ((len(part1_labels) / len(labels)) * entropy(part1_labels) + (len(part2_labels) / len(labels)) + entropy(part2_labels))
+		gain = entropy(labels) - ((len(part1_labels) / len(labels)) * entropy(part1_labels) + (len(part2_labels) / len(labels)) * entropy(part2_labels))
 		
 		if gain > best_gain:
 			best_gain = gain
 			best_attr = attr_index
 	
 	return best_attr
+
+def max_label(labels):
+	# get counts
+	label_choices = list(set(labels))
+	total_count = len(labels)
+	label_counts = [0] * len(label_choices)
+	for label in labels:
+		label_counts[label_choices.index(label)] += 1
+	
+	max_count = max(label_counts)
+	return label_choices[label_counts.index(max_count)]
 
 def main():
 	filename = "ACLED-All-Africa-File_20170101-to-20170923_csv.csv"
@@ -265,14 +277,31 @@ def main():
 	clf.fit(training_data, training_labels)
 
 	print("Building tree from SVM classifier...")
-	invalid_attrs = set(range(18,65))
-	num_attrs = len(column_names)
-	for n in range(num_previous):
-		invalid_attrs |= set(range(num_attrs * (n+1) + 18, num_attrs * (n+1) + 65))
-	invalid_attrs |= set(range(num_previous * num_attrs, (num_previous + 1) * num_attrs))
-	
-	attr = find_best_attribute(training_data, clf, invalid_attrs)
-	print(str(attr // num_attrs) + " " + column_names[attr % num_attrs])
+	clf2 = tree.DecisionTreeClassifier()
+	clf2 = clf2.fit(training_data, clf.predict(training_data))
+# 	num_attrs = len(column_names)
+# 	invalid_attrs = set() # cant use country as a predictor
+# 	for n in range(num_previous):
+# 		invalid_attrs |= set(range(num_attrs * (n) + 18, num_attrs * (n) + 65))
+# 	
+# 	attr = find_best_attribute(training_data, clf, invalid_attrs)
+# 	print(str(attr // num_attrs) + " " + column_names[attr % num_attrs])
+# 	
+# 	below, below_labels, above, above_labels = split_by_attr(training_data, training_labels, attr, 0.5)
+# 	below_split_attr = find_best_attribute(below, clf, invalid_attrs)
+# 	print(str(below_split_attr // num_attrs) + " " + column_names[below_split_attr % num_attrs])
+# 	above_split_attr = find_best_attribute(above, clf, invalid_attrs)
+# 	print(str(above_split_attr // num_attrs) + " " + column_names[above_split_attr % num_attrs])
+# 	
+# 	below_below, below_below_labels, below_above, below_above_labels = split_by_attr(below, below_labels, below_split_attr, 0.5)
+# 	above_below, above_below_labels, above_above, above_above_labels = split_by_attr(above, above_labels, above_split_attr, 0.5)
+# 	print max_label(below_below_labels)
+# 	print max_label(below_above_labels)
+# 	print max_label(above_below_labels)
+# 	print max_label(above_above_labels)
+	dot_data = tree.export_graphviz(clf2, out_file=None)
+	graph = graphviz.Source(dot_data)
+	graph.render("clf2") 
 
 if __name__ == '__main__':
 	main()

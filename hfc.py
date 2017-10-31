@@ -1,11 +1,12 @@
 import csv
 import datetime
 import graphviz
+import json
 import math
 import numpy as np
+import random
 import re
 from sklearn import svm, tree
-import time
 
 all_features = ['GWNO', 'EVENT_ID_CNTY', 'EVENT_ID_NO_CNTY', 'EVENT_DATE',
 		'YEAR', 'TIME_PRECISION', 'EVENT_TYPE', 'ACTOR1', 'ALLY_ACTOR_1',
@@ -13,14 +14,18 @@ all_features = ['GWNO', 'EVENT_ID_CNTY', 'EVENT_ID_NO_CNTY', 'EVENT_DATE',
 		'ADMIN1', 'ADMIN2', 'ADMIN3', 'LOCATION', 'LATITUDE', 'LONGITUDE',
 		'GEO_PRECISION', 'SOURCE', 'NOTES', 'FATALITIES']
 
-final_features = ['GWNO', 'EVENT_DATE', 'YEAR', 'TIME_PRECISION', 'EVENT_TYPE',
-		'ACTOR1', 'ALLY_ACTOR_1', 'INTER1', 'ACTOR2', 'ALLY_ACTOR_2', 'INTER2',
-		'INTERACTION', 'COUNTRY', 'LATITUDE', 'LONGITUDE', 'GEO_PRECISION',
-		'FATALITIES']
-final_features2 = ['EVENT_DATE', 'YEAR', 'TIME_PRECISION', 'EVENT_TYPE',
+final_features = ['EVENT_DATE', 'YEAR', 'TIME_PRECISION', 'EVENT_TYPE',
 		'INTER1', 'INTER2',
 		'INTERACTION', 'COUNTRY', 'LATITUDE', 'LONGITUDE', 'GEO_PRECISION',
 		'FATALITIES']
+
+ignored_features = ['GWNO', 'EVENT_ID_CNTY', 'EVENT_ID_NO_CNTY',
+		'ACTOR1', 'ALLY_ACTOR_1',
+		'ACTOR2', 'ALLY_ACTOR_2',
+		'ADMIN1', 'ADMIN2', 'ADMIN3', 'LOCATION', 
+		'SOURCE', 'NOTES'
+		#, 'COUNTRY'
+		]
 
 def get_feature_names(filename):
 	with open(filename, "rb") as f:
@@ -40,7 +45,7 @@ def date_str_to_int(date_str):
 
 def get_features_and_possible_values(filename):
 	#feature_names = get_feature_names(filename)
-	feature_names = final_features2
+	feature_names = final_features
 	feat_vals = {}
 	for feat in feature_names:
 		feat_vals[feat] = set()
@@ -85,6 +90,8 @@ def max_min_vals(possible_values, feature_numeric):
 def normalize_feature_names(feature_names, feature_is_numeric, possible_values):
 	col_names = []
 	for feat in feature_names:
+		if feat in ignored_features:
+			continue
 		if feature_is_numeric[feat]:
 			col_names.append(feat)
 		else:
@@ -111,6 +118,8 @@ def get_row_normalized(row, features, features_numeric, possible_values,
 		min_vals, max_vals):
 	row_normalized_features = []
 	for feature in features:
+		if feature in ignored_features:
+			continue
 		feat_normalized = normalize_feature(row[feature],
 				features_numeric[feature], possible_values[feature],
 				min_vals.get(feature), max_vals.get(feature))
@@ -238,6 +247,16 @@ def max_label(labels):
 def main():
 	filename = "ACLED-All-Africa-File_20170101-to-20170923_csv.csv"
 	
+# 	jsonname = "events.jl"
+# 	json_lines = open(jsonname).readlines()
+# 	n = 0
+# 	test = set()
+# 	for line in json_lines:
+# 		n += 1
+# 		object = json.loads(line)
+# 		test.update(object.keys())
+# 	print test
+	
 	print("Getting data from file...")
 	data = get_data(filename)
 	data = split_by_field(data, 'COUNTRY')
@@ -261,47 +280,52 @@ def main():
 			country_rows_normalized.append(row_normalized)
 		data_normalized[country] = country_rows_normalized
 	
-	print("Preparing training data...")
-	training_data = []
-	training_labels = []
+	print("Preparing train/test data...")
+	X = []
+	Y = []
 	num_previous = 1
 	for country, rows in data_normalized.iteritems():
 		for index in range(num_previous, len(rows)):
 			training_point = get_features(rows, index, num_previous)
 			label = min(1, data[country][index]['FATALITIES'])
-			training_data.append(training_point)
-			training_labels.append(label)
+			X.append(training_point)
+			Y.append(label)
+	
+	XY = zip(X,Y)
+	random.seed(0)
+	random.shuffle(XY)
+	split = int(math.floor(0.8 * len(X)))
+	XY_train = XY[:split]
+	XY_test = XY[split:]
+	train_data, train_labels = zip(*XY_train)
+	test_data, test_labels = zip(*XY_test)
+
+	#train_data += test_data
+	#train_labels += test_labels
 
 	print("Training classifier...")
-	clf = svm.LinearSVC()
-	clf.fit(training_data, training_labels)
+	svmclf = svm.LinearSVC()
+	svmclf.fit(train_data, train_labels)
 
 	print("Building tree from SVM classifier...")
-	clf2 = tree.DecisionTreeClassifier()
-	clf2 = clf2.fit(training_data, clf.predict(training_data))
-# 	num_attrs = len(column_names)
-# 	invalid_attrs = set() # cant use country as a predictor
-# 	for n in range(num_previous):
-# 		invalid_attrs |= set(range(num_attrs * (n) + 18, num_attrs * (n) + 65))
-# 	
-# 	attr = find_best_attribute(training_data, clf, invalid_attrs)
-# 	print(str(attr // num_attrs) + " " + column_names[attr % num_attrs])
-# 	
-# 	below, below_labels, above, above_labels = split_by_attr(training_data, training_labels, attr, 0.5)
-# 	below_split_attr = find_best_attribute(below, clf, invalid_attrs)
-# 	print(str(below_split_attr // num_attrs) + " " + column_names[below_split_attr % num_attrs])
-# 	above_split_attr = find_best_attribute(above, clf, invalid_attrs)
-# 	print(str(above_split_attr // num_attrs) + " " + column_names[above_split_attr % num_attrs])
-# 	
-# 	below_below, below_below_labels, below_above, below_above_labels = split_by_attr(below, below_labels, below_split_attr, 0.5)
-# 	above_below, above_below_labels, above_above, above_above_labels = split_by_attr(above, above_labels, above_split_attr, 0.5)
-# 	print max_label(below_below_labels)
-# 	print max_label(below_above_labels)
-# 	print max_label(above_below_labels)
-# 	print max_label(above_above_labels)
-	dot_data = tree.export_graphviz(clf2, out_file=None)
+	dt = tree.DecisionTreeClassifier(max_depth=3)
+	dt = dt.fit(train_data, svmclf.predict(train_data))
+	dot_data = tree.export_graphviz(dt, out_file=None,feature_names=column_names)
 	graph = graphviz.Source(dot_data)
-	graph.render("clf2") 
+	graph.render("tree") 
+	
+	print("Testing...")
+	svm_test_pred = svmclf.predict(test_data)
+	svm_test_pred = np.array(svm_test_pred)
+	dt_test_pred = dt.predict(test_data)
+	dt_test_pred = np.array(dt_test_pred)
+	test_labels = np.array(test_labels)
+	svm_num_equal = np.sum(svm_test_pred == test_labels)
+	dt_num_equal = np.sum(dt_test_pred == test_labels)
+# 	print svm_num_equal
+# 	print dt_num_equal
+	print "SVM accuracy=" + str(float(svm_num_equal)/len(test_labels))
+	print "Tree accuracy=" + str(float(dt_num_equal)/len(test_labels))
 
 if __name__ == '__main__':
 	main()

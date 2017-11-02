@@ -244,6 +244,10 @@ def max_label(labels):
 	max_count = max(label_counts)
 	return label_choices[label_counts.index(max_count)]
 
+def num_percent_str(num, total):
+	return str(num) + "\t" + str("%.2f" % (float(num) * 100 / total)) + "%"
+	
+
 def main():
 	filename = "ACLED-All-Africa-File_20170101-to-20170923_csv.csv"
 	
@@ -300,9 +304,6 @@ def main():
 	train_data, train_labels = zip(*XY_train)
 	test_data, test_labels = zip(*XY_test)
 
-	#train_data += test_data
-	#train_labels += test_labels
-
 	print("Training classifier...")
 	svmclf = svm.LinearSVC()
 	svmclf.fit(train_data, train_labels)
@@ -322,10 +323,28 @@ def main():
 	test_labels = np.array(test_labels)
 	svm_num_equal = np.sum(svm_test_pred == test_labels)
 	dt_num_equal = np.sum(dt_test_pred == test_labels)
-# 	print svm_num_equal
-# 	print dt_num_equal
-	print "SVM accuracy=" + str(float(svm_num_equal)/len(test_labels))
-	print "Tree accuracy=" + str(float(dt_num_equal)/len(test_labels))
+	
+	print("Num training\t" + num_percent_str(len(train_data), len(X)))
+	print("Num test\t" + num_percent_str(len(test_data), len(X)))
+	print("Negative total\t" + num_percent_str(np.sum(np.array(Y) == 0), len(X)))
+	print("Positive total\t" + num_percent_str(np.sum(np.array(Y) == 1), len(X)))
+	print("Negative test\t" + num_percent_str(np.sum(np.array(test_labels) == 0), len(test_labels)))
+	print("Positive test\t" + num_percent_str(np.sum(np.array(test_labels) == 1), len(test_labels)))
+	
+	print "SVM accuracy\t" + num_percent_str(svm_num_equal,len(test_labels))
+	print "Tree accuracy\t" + num_percent_str(dt_num_equal,len(test_labels))
+	
+	# precision and recall
+	truepos = len(np.intersect1d(np.where(svm_test_pred == 1),np.where(test_labels == 1)))
+	falsepos = len(np.intersect1d(np.where(svm_test_pred == 1),np.where(test_labels == 0)))
+	trueneg = len(np.intersect1d(np.where(svm_test_pred == 0),np.where(test_labels == 0)))
+	falseneg = len(np.intersect1d(np.where(svm_test_pred == 0),np.where(test_labels == 1)))
+	precision = float(truepos) / (truepos + falsepos)
+	recall = float(truepos) / (truepos + falseneg)
+	f1 = 2 * precision * recall / (precision + recall)
+	print("Precision\t" + ("%.4f" % precision))
+	print("Recall\t\t" + ("%.4f" % recall))
+	print("F1\t\t" + ("%.4f" % f1))
 
 if __name__ == '__main__':
 	main()

@@ -287,13 +287,18 @@ def main():
 	print("Preparing train/test data...")
 	X = []
 	Y = []
-	num_previous = 1
+	num_previous = 2
 	for country, rows in data_normalized.iteritems():
 		for index in range(num_previous, len(rows)):
 			training_point = get_features(rows, index, num_previous)
 			label = min(1, data[country][index]['FATALITIES'])
 			X.append(training_point)
 			Y.append(label)
+	
+	final_columns = []
+	for num in range(num_previous):
+		for name in column_names:
+			final_columns.append("prev#" + str(num+1) + " " + name)
 	
 	XY = zip(X,Y)
 	random.seed(0)
@@ -311,7 +316,7 @@ def main():
 	print("Building tree from SVM classifier...")
 	dt = tree.DecisionTreeClassifier(max_depth=3)
 	dt = dt.fit(train_data, svmclf.predict(train_data))
-	dot_data = tree.export_graphviz(dt, out_file=None,feature_names=column_names)
+	dot_data = tree.export_graphviz(dt, out_file=None,feature_names=final_columns)
 	graph = graphviz.Source(dot_data)
 	graph.render("tree") 
 	

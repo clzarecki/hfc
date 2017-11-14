@@ -251,18 +251,17 @@ def num_percent_str(num, total):
 def main():
 	filename = "ACLED-All-Africa-File_20170101-to-20170923_csv.csv"
 	
-# 	jsonname = "events.jl"
-# 	json_lines = open(jsonname).readlines()
-# 	n = 0
-# 	test = set()
-# 	for line in json_lines:
-# 		n += 1
-# 		object = json.loads(line)
-# 		test.update(object.keys())
-# 	print test
-	
 	print("Getting data from file...")
 	data = get_data(filename)
+	
+# 	fatalities_freq = {}
+# 	for event in data:
+# 		fatalities = event["FATALITIES"]
+# 		if fatalities not in fatalities_freq:
+# 			fatalities_freq[fatalities] = 0.0
+# 		fatalities_freq[fatalities] += 1
+# 	print fatalities_freq
+	
 	data = split_by_field(data, 'COUNTRY')
 	
 	# sort by date
@@ -284,72 +283,76 @@ def main():
 			country_rows_normalized.append(row_normalized)
 		data_normalized[country] = country_rows_normalized
 	
-	print("Preparing train/test data...")
-	X = []
-	Y = []
-	num_previous = 2
-	for country, rows in data_normalized.iteritems():
-		for index in range(num_previous, len(rows)):
-			training_point = get_features(rows, index, num_previous)
-			label = min(1, data[country][index]['FATALITIES'])
-			X.append(training_point)
-			Y.append(label)
+	for num_previous in [1,2,3,4,5,10]:
+		print("Preparing train/test data...")
+		X = []
+		Y = []
+		for country, rows in data_normalized.iteritems():
+			for index in range(num_previous, len(rows)):
+				num_fatalities = data[country][index]['FATALITIES']
+# 				if num_fatalities > 0 and num_fatalities < 5:
+# 					continue
+				training_point = get_features(rows, index, num_previous)
+				label = min(1, num_fatalities)
+				X.append(training_point)
+				Y.append(label)
 	
-	final_columns = []
-	for num in range(num_previous):
-		for name in column_names:
-			final_columns.append("prev#" + str(num+1) + " " + name)
+		final_columns = []
+		for num in range(num_previous):
+			for name in column_names:
+				final_columns.append("prev#" + str(num+1) + " " + name)
 	
-	XY = zip(X,Y)
-	random.seed(0)
-	random.shuffle(XY)
-	split = int(math.floor(0.8 * len(X)))
-	XY_train = XY[:split]
-	XY_test = XY[split:]
-	train_data, train_labels = zip(*XY_train)
-	test_data, test_labels = zip(*XY_test)
+		XY = zip(X,Y)
+		random.seed(0)
+		random.shuffle(XY)
+		split = int(math.floor(0.8 * len(X)))
+		XY_train = XY[:split]
+		XY_test = XY[split:]
+		train_data, train_labels = zip(*XY_train)
+		test_data, test_labels = zip(*XY_test)
 
-	print("Training classifier...")
-	svmclf = svm.LinearSVC()
-	svmclf.fit(train_data, train_labels)
+		print("Training classifier...")
+		svmclf = svm.LinearSVC()
+		svmclf.fit(train_data, train_labels)
 
-	print("Building tree from SVM classifier...")
-	dt = tree.DecisionTreeClassifier(max_depth=3)
-	dt = dt.fit(train_data, svmclf.predict(train_data))
-	dot_data = tree.export_graphviz(dt, out_file=None,feature_names=final_columns)
-	graph = graphviz.Source(dot_data)
-	graph.render("tree") 
+		print("Building tree from SVM classifier...")
+		dt = tree.DecisionTreeClassifier(max_depth=3)
+		dt = dt.fit(train_data, svmclf.predict(train_data))
+		dot_data = tree.export_graphviz(dt, out_file=None,feature_names=final_columns,class_names=["Fatalities=0","Fatalities>=1"],impurity=False)
+		graph = graphviz.Source(dot_data)
+		graph.render(str(num_previous) + "prev") 
 	
-	print("Testing...")
-	svm_test_pred = svmclf.predict(test_data)
-	svm_test_pred = np.array(svm_test_pred)
-	dt_test_pred = dt.predict(test_data)
-	dt_test_pred = np.array(dt_test_pred)
-	test_labels = np.array(test_labels)
-	svm_num_equal = np.sum(svm_test_pred == test_labels)
-	dt_num_equal = np.sum(dt_test_pred == test_labels)
+		print("Testing...")
+		svm_test_pred = svmclf.predict(test_data)
+		svm_test_pred = np.array(svm_test_pred)
+		dt_test_pred = dt.predict(test_data)
+		dt_test_pred = np.array(dt_test_pred)
+		test_labels = np.array(test_labels)
+		svm_num_equal = np.sum(svm_test_pred == test_labels)
+		dt_num_equal = np.sum(dt_test_pred == test_labels)
 	
-	print("Num training\t" + num_percent_str(len(train_data), len(X)))
-	print("Num test\t" + num_percent_str(len(test_data), len(X)))
-	print("Negative total\t" + num_percent_str(np.sum(np.array(Y) == 0), len(X)))
-	print("Positive total\t" + num_percent_str(np.sum(np.array(Y) == 1), len(X)))
-	print("Negative test\t" + num_percent_str(np.sum(np.array(test_labels) == 0), len(test_labels)))
-	print("Positive test\t" + num_percent_str(np.sum(np.array(test_labels) == 1), len(test_labels)))
+		print("Results for using previous " + str(num_previous) + " events:")
+		print("Num training\t" + num_percent_str(len(train_data), len(X)))
+		print("Num test\t" + num_percent_str(len(test_data), len(X)))
+		print("Negative total\t" + num_percent_str(np.sum(np.array(Y) == 0), len(X)))
+		print("Positive total\t" + num_percent_str(np.sum(np.array(Y) == 1), len(X)))
+		print("Negative test\t" + num_percent_str(np.sum(np.array(test_labels) == 0), len(test_labels)))
+		print("Positive test\t" + num_percent_str(np.sum(np.array(test_labels) == 1), len(test_labels)))
 	
-	print "SVM accuracy\t" + num_percent_str(svm_num_equal,len(test_labels))
-	print "Tree accuracy\t" + num_percent_str(dt_num_equal,len(test_labels))
+		print "SVM accuracy\t" + num_percent_str(svm_num_equal,len(test_labels))
+		print "Tree accuracy\t" + num_percent_str(dt_num_equal,len(test_labels))
 	
-	# precision and recall
-	truepos = len(np.intersect1d(np.where(svm_test_pred == 1),np.where(test_labels == 1)))
-	falsepos = len(np.intersect1d(np.where(svm_test_pred == 1),np.where(test_labels == 0)))
-	trueneg = len(np.intersect1d(np.where(svm_test_pred == 0),np.where(test_labels == 0)))
-	falseneg = len(np.intersect1d(np.where(svm_test_pred == 0),np.where(test_labels == 1)))
-	precision = float(truepos) / (truepos + falsepos)
-	recall = float(truepos) / (truepos + falseneg)
-	f1 = 2 * precision * recall / (precision + recall)
-	print("Precision\t" + ("%.4f" % precision))
-	print("Recall\t\t" + ("%.4f" % recall))
-	print("F1\t\t" + ("%.4f" % f1))
+		# precision and recall
+		truepos = len(np.intersect1d(np.where(svm_test_pred == 1),np.where(test_labels == 1)))
+		falsepos = len(np.intersect1d(np.where(svm_test_pred == 1),np.where(test_labels == 0)))
+		trueneg = len(np.intersect1d(np.where(svm_test_pred == 0),np.where(test_labels == 0)))
+		falseneg = len(np.intersect1d(np.where(svm_test_pred == 0),np.where(test_labels == 1)))
+		precision = float(truepos) / (truepos + falsepos)
+		recall = float(truepos) / (truepos + falseneg)
+		f1 = 2 * precision * recall / (precision + recall)
+		print("Precision\t" + ("%.4f" % precision))
+		print("Recall\t\t" + ("%.4f" % recall))
+		print("F1\t\t" + ("%.4f" % f1))
 
 if __name__ == '__main__':
 	main()

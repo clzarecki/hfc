@@ -194,6 +194,69 @@ def get_features(data, index, num_previous):
 def num_percent_str(num, total):
 	return str(num) + "\t" + str("%.2f" % (float(num) * 100 / total)) + "%"
 
+def find_between(s, first, last):
+	try:
+		start = s.index( first ) + len( first )
+		end = s.index( last, start )
+		return s[start:end]
+	except ValueError:
+		return ""
+
+def node_json(nodenum, treedata):
+	nodedata = treedata[nodenum]
+	has_discrete_question = False
+	if nodedata[0].find("<=") < 0:
+		has_discrete_question = True
+	json = '"name": "' + nodedata[0] + '"'
+	if nodedata[1] == None:
+		# leaf node
+		return json
+	child1json = node_json(nodedata[1], treedata)
+	child2json = node_json(nodedata[2], treedata)
+	if has_discrete_question:
+		json += ',"children": [{' + child2json + '},{' + child1json + '}]'
+	else:
+		json += ',"children": [{' + child1json + '},{' + child2json + '}]'
+	return json
+
+def get_tree_json(decision_tree_data):
+	# build tree
+	treelines = decision_tree_data.split('\n')
+	nodes = {}
+	for line in treelines:
+		firstchar = line[0]
+		if not firstchar.isdigit():
+			continue
+		lineparts = line.split()
+		nodenum = int(lineparts[0])
+		charAfterSpace = lineparts[1][0]
+		if charAfterSpace == '[':
+			# get node question and value
+			
+			info = find_between(line, "[", "]")
+			info = find_between(info, '"', '"')
+			infovals = info.split("\\n")
+			valinfo = infovals[-1]
+			if len(infovals) == 3:
+				# internal node
+				question = infovals[0]
+				pointfiveindex = question.find("<= 0.5")
+				if pointfiveindex >= 0:
+					question = question[:pointfiveindex].strip()
+				nodes[nodenum] = (question, None, None)
+			else:
+				# leaf node
+				val = valinfo[valinfo.index("=") + 2:]
+				nodes[nodenum] = (val, None, None)
+		if charAfterSpace == "-":
+			child = int(lineparts[2])
+			parentnode = nodes[nodenum]
+			if parentnode[1] == None:
+				nodes[nodenum] = (parentnode[0], child, None)
+			else:
+				nodes[nodenum] = (parentnode[0], parentnode[1], child)
+	return "{" + node_json(0, nodes) + "}"
+
 def main():
 	filename = "ACLED-All-Africa-File_20170101-to-20170923_csv.csv"
 	
@@ -229,7 +292,8 @@ def main():
 			country_rows_normalized.append(row_normalized)
 		data_normalized[country] = country_rows_normalized
 	
-	for num_previous in [1,2,3,4,5,10]:
+# 	for num_previous in [1,2,3,4,5,10]:
+	for num_previous in [5]:
 		print("Preparing train/test data...")
 		X = []
 		Y = []
@@ -269,8 +333,10 @@ def main():
 		dt = dt.fit(train_data, svmclf.predict(train_data))
 		dot_data = tree.export_graphviz(dt, out_file=None,feature_names=final_columns,class_names=["Fatalities=0","Fatalities>=1"],impurity=False)
 		graph = graphviz.Source(dot_data)
-		graph.render(str(num_previous) + "prev") 
-	
+		graph.render(str(num_previous) + "prev")
+		
+		print get_tree_json(dot_data)
+
 # 		print("Testing...")
 # 		svm_test_pred = svmclf.predict(test_data)
 # 		svm_test_pred = np.array(svm_test_pred)

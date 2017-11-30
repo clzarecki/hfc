@@ -210,6 +210,7 @@ def node_json(nodenum, treedata):
 	json = '"name": "' + nodedata[0] + '"'
 	if nodedata[1] == None:
 		# leaf node
+		json = '"name": "' + nodedata[0] + ' Fatalities"'
 		return json
 	child1json = node_json(nodedata[1], treedata)
 	child2json = node_json(nodedata[2], treedata)

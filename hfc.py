@@ -26,6 +26,12 @@ ignored_features = ['GWNO', 'EVENT_ID_CNTY', 'EVENT_ID_NO_CNTY',
 		]
 
 def get_feature_names(filename):
+	"""Get feature names from a csv file
+	Arguments:
+	filename ­­ the path/name of the csv file
+	Returns:
+	A list of strings as feature names
+	"""
 	with open(filename, "rb") as f:
 		reader = csv.reader(f)
 		i = reader.next()
@@ -33,19 +39,44 @@ def get_feature_names(filename):
 	return i
 
 def date_str_to_int(date_str):
+	"""Convert a date string to days since 1/1/1997
+	Arguments:
+	date_str ­­ date as a string in MM/DD/YYYY format
+	Returns:
+	an integer of the number of days since 1/1/1997
+	"""
 	date_format = '%m/%d/%Y'
 	date = datetime.datetime.strptime(date_str, date_format)
 	num_days = (date - datetime.datetime(1997,1,1)).days
 	return num_days
 	
 def int_to_date(num_days):
+	"""Convert num of days since 1/1/1997 to a date
+	Arguments:
+	num_days ­­ number of days since 1/1/1997 as an integer
+	Returns:
+	The converted date object
+	"""
 	date = datetime.datetime(1997,1,1) + datetime.timedelta(days=num_days)
 	return date
 
 def num_months_between_dates(date1, date2):
+	"""Calculates the number of months between two dates as an absolute value
+	Arguments:
+	date1 -- the first date object
+	date2 -- the second date object
+	Returns:
+	The number of months as an integer
+	"""
 	return np.absolute((date1.year - date2.year) * 12 + (date1.month - date2.month))
 
 def num_events_per_month(events):
+	"""Calculate the average number of events per month from a list of events
+	Arguments:
+	events ­­ a list of events, in order by date
+	Returns:
+	The average number of events per month, as a float
+	"""
 	first_event_date = int_to_date(events[0]["EVENT_DATE"])
 	last_event_date = int_to_date(events[-1]["EVENT_DATE"])
 	num_months = num_months_between_dates(last_event_date, first_event_date)
@@ -55,6 +86,15 @@ def num_events_per_month(events):
 	return num_events / float(num_months)
 	
 def get_features_and_possible_values(filename):
+	"""Get possible values for a set of features in a csv file. The features to
+	get values for are in the final_features list. The EVENT_DATE feature is
+	converted to an integer.
+	Arguments:
+	filename ­­ the path/name of the csv file
+	Returns:
+	A dictionary of lists, with key as feature name and value as a list of
+	strings or integers, in sorted order
+	"""
 	#feature_names = get_feature_names(filename)
 	feature_names = final_features
 	feat_vals = {}
@@ -76,6 +116,14 @@ def get_features_and_possible_values(filename):
 	return feature_names, feat_vals
 
 def feature_is_numeric(possible_values):
+	"""Determines if a feature is numeric, depending on feature values
+	Arguments:
+	possible_values ­­ a dictionary of feature name to list of values a feature
+	can take
+	Returns:
+	A dictionary of feature name to boolean, True if all possible feature
+	values are castable as float, False otherwise
+	"""
 	numeric = {}
 	for name, values in possible_values.iteritems():
 		feat_values = np.array(values)
@@ -87,6 +135,16 @@ def feature_is_numeric(possible_values):
 	return numeric
 
 def max_min_vals(possible_values, feature_numeric):
+	"""Finds the maximum and minimum value for each numeric feature
+	Arguments:
+	possible_values ­­ a dictionary of feature name to list of values a feature
+	can take
+	feature_numeric -- a dictionary of feature name to boolean, whether or not
+	a feature is numeric
+	Returns:
+	A dictionary of feature name to float, the maximum feature value
+	A dictionary of feature name to float, the minimum feature value
+	"""
 	max_vals = {}
 	min_vals = {}
 	for feat_name, is_numeric in feature_numeric.iteritems():
@@ -99,6 +157,19 @@ def max_min_vals(possible_values, feature_numeric):
 	return max_vals, min_vals
 	
 def normalize_feature_names(feature_names, feature_is_numeric, possible_values):
+	"""Get list of features names, normalized for numeric classifiers. Numeric
+	features just get the feature name. Discrete-valued features are expanded
+	to a list of one-hot features, formatted as FEAT_NAME=VALUE
+	Arguments:
+	feature_names ­­ a list of feature names as strings
+	feature_is_numeric -- a dictionary of string feature names to boolean
+	values, whether or not a given feature is numeric
+	possible_values -- a dictionary of string feature names to list of sorted
+	possible feature values
+	Returns:
+	A list of feature names, normalized to include one-hot representations of
+	discrete features
+	"""
 	col_names = []
 	for feat in feature_names:
 		if feat in ignored_features:
@@ -111,6 +182,21 @@ def normalize_feature_names(feature_names, feature_is_numeric, possible_values):
 	return col_names
 
 def normalize_feature(value, feature_is_numeric, possible_values, min, max):
+	"""Normalizes a feature value to be between 0 and 1
+	Arguments:
+	value ­­ the given feature value
+	feature_is_numeric -- True if the feature from the given value is numeric
+	possible values -- a sorted list of possble values from the feature the
+	value came from
+	min -- float for the minimum value from the feature the given value came
+	from
+	max -- float for the maximum value from the feature the given value came
+	from
+	Returns:
+	Float for the normalized feature value, 0 to 1 normalized between the
+	minimum and the maximum value for numeric features, otherwise a one-hot
+	list of the represented discrete value
+	"""
 	if feature_is_numeric:
 		float_val = float(value)
 		float_max = float(max)
@@ -127,6 +213,21 @@ def normalize_feature(value, feature_is_numeric, possible_values, min, max):
 
 def get_row_normalized(row, features, features_numeric, possible_values,
 		min_vals, max_vals):
+	"""Normalizes a row so all values are between 0 and 1
+	Arguments:
+	row ­­ raw values from the event
+	features -- a list of features to include
+	features_numeric -- a dictionary of string feature names to boolean
+	values, whether or not a given feature is numeric
+	possible values -- a dictionary of string feature names to list of sorted
+	possible feature values
+	min_values -- a dictionary of string feature names to minimum value float
+	max -- a dictionary of string feature names to maximum value float
+	Returns:
+	A list of 0 to 1 normalized floats for the event, each feature either being
+	0 to 1 normalized between the minimum and the maximum value for numeric
+	features, or a one-hot list of the represented discrete value
+	"""
 	row_normalized_features = []
 	for feature in features:
 		if feature in ignored_features:
@@ -138,6 +239,16 @@ def get_row_normalized(row, features, features_numeric, possible_values,
 	return row_normalized_features
 
 def get_normalized_col_names(filename):
+	"""Get list of features names from a csv file, normalized for numeric
+	classifiers. Numeric features just get the feature name. Discrete-valued
+	features are expanded to a list of one-hot features, formatted as
+	FEAT_NAME=VALUE
+	Arguments:
+	filename -- the csv file/path as a string
+	Returns:
+	A list of feature names, normalized to include one-hot representations of
+	discrete features
+	"""
 	feat_names, pos_feat_vals = get_features_and_possible_values(filename)
 	feat_numeric = feature_is_numeric(pos_feat_vals)
 	max_vals, min_vals = max_min_vals(pos_feat_vals, feat_numeric)
@@ -146,6 +257,15 @@ def get_normalized_col_names(filename):
 	return col_names
 
 def row_vals_to_float(row):
+	"""Convert a dictionary's string values to float. If a string isn't able to
+	be converted to float, it is retained as-is, otherwise the float value is
+	used instead.
+	Arguments:
+	row -- dictionary of string feature name to string values
+	Returns:
+	The converted dictionary of feature name to values, each being either a
+	string or float
+	"""
 	float_row = {}
 	float_match = re.compile(r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?$').match
 	for key,val in row.iteritems():
@@ -156,6 +276,13 @@ def row_vals_to_float(row):
 	return float_row
 
 def get_data(filename):
+	"""Get data from a csv file, each value converted to float if possible.
+	Arguments:
+	filename -- the file/path to the csv file
+	Returns:
+	A list of rows, each row being a dictionary of feature name keys to string
+	or float values from the file
+	"""
 	data = []
 	with open(filename) as csvfile:
 		reader = csv.DictReader(csvfile)
@@ -166,6 +293,17 @@ def get_data(filename):
 	return data
 
 def split_by_field(data, field1, field2):
+	"""Split data into a combination of two different fields.
+	Arguments:
+	data -- A list of rows, each row being a dictionary of feature name keys to
+	string or float values
+	field1 -- the first field to split on
+	field2 -- the second field to split on
+	Returns:
+	The separated data, as a dictionary. Each key is a combination of field
+	values, contatenated together. The values are a list of events, each event
+	being a dictionary of feature name to value.
+	"""
 	split_data = {}
 	for row in data:
 		key = row[field1] + row[field2]
@@ -176,11 +314,31 @@ def split_by_field(data, field1, field2):
 	return split_data
 
 def compare_by_date(row1, row2):
+	"""Compare two events by EVENT_DATE field name
+	Arguments:
+	row1 -- the first event, with the EVENT_DATE field being a numerical value
+	row2 -- the second event, with the EVENT_DATE field being a numerical value
+	Returns:
+	A negative value if row1 is before row2, 0 if the rows have equal dates, a
+	positive value if row1 is after row2
+	"""
 	row1_date = row1['EVENT_DATE']
 	row2_date = row2['EVENT_DATE']
 	return int(row1_date) - int(row2_date)
 
 def get_features(data, index, num_previous):
+	"""Get a list of consecutive events concatenated together, to be used in a
+	predictive classifier for the next event after the last one
+	Arguments:
+	data -- a list of events sorted by date, each event being a list of 0/1
+	normalized values
+	index -- the index of the event after the last event to include in the list
+	num_previous -- the number of events to concatenate together
+	Returns:
+	A list of 0/1 normalized values with length=(len(data[0]) * num_previous).
+	The list is a concatenated list of num_previous events before the given
+	index.
+	"""
 	if num_previous > index:
 		return
 	
@@ -192,9 +350,27 @@ def get_features(data, index, num_previous):
 	return feature_vals
 
 def num_percent_str(num, total):
+	"""Format a number as the number and a percentage of the total, rounded to
+	two decimal places and separated by a tab.
+	Arguments:
+	num: the number
+	total: the total number possible
+	Returns:
+	A formatted string as the number, a tab, then the percentage of the total
+	"""
 	return str(num) + "\t" + str("%.2f" % (float(num) * 100 / total)) + "%"
 
 def find_between(s, first, last):
+	"""In a string, get the value between the first instance of two values. For
+	example, if the string is "Hello World!", the first value is "l", and the
+	last value is "d", the returned value would be "lo Worl"
+	Arguments:
+	s -- the string to find the substring in
+	first -- the value immediately preceding the substring
+	last -- the value immediately following the substring
+	Returns:
+	The substring as described
+	"""
 	try:
 		start = s.index( first ) + len( first )
 		end = s.index( last, start )
@@ -203,6 +379,16 @@ def find_between(s, first, last):
 		return ""
 
 def node_json(nodenum, treedata):
+	"""Generate the JSON string representation of a tree, with "name" being the
+	value of the node, and "children" being a JSON list of the node's children.
+	Arguments:
+	nodenum -- the index of the root
+	treedata -- an array representation of a tree, each entry being a tuple of
+	three values: the node value, the index of the left child, the index of the
+	right child
+	Returns:
+	JSON string of the tree
+	"""
 	nodedata = treedata[nodenum]
 	has_discrete_question = False
 	if nodedata[0].find("<=") < 0:
@@ -221,6 +407,15 @@ def node_json(nodenum, treedata):
 	return json
 
 def get_tree_json(decision_tree_data):
+	"""Generate an array representation of a tree from a graphviz string
+	representation of that tree.
+	Arguments:
+	decision_tree_data -- a string of the graphviz representation of a tree
+	Returns:
+	the array representation of a tree, each entry being a tuple of three
+	values: the node value, the index of the left child, the index of the right
+	child
+	"""
 	# build tree
 	treelines = decision_tree_data.split('\n')
 	nodes = {}
@@ -264,6 +459,7 @@ def main():
 	print("Getting data from file...")
 	data = get_data(filename)
 	
+	# get a histogram of number of fatalities for events
 # 	fatalities_freq = {}
 # 	for event in data:
 # 		fatalities = event["FATALITIES"]
@@ -293,6 +489,9 @@ def main():
 			country_rows_normalized.append(row_normalized)
 		data_normalized[country] = country_rows_normalized
 	
+	"""
+	Choose the number of previous events to use as features in the classifier
+	"""
 # 	for num_previous in [1,2,3,4,5,10]:
 	for num_previous in [5]:
 		print("Preparing train/test data...")
@@ -302,19 +501,29 @@ def main():
 			events_per_month = num_events_per_month(data[country])
 			for index in range(num_previous, len(rows)):
 				num_fatalities = data[country][index]['FATALITIES']
+				"""
+				Uncomment the following lines to ignore events with number of
+				fatalities between 0 and 5 exclusive
+				"""
 # 				if num_fatalities > 0 and num_fatalities < 5:
 # 					continue
 				training_point = get_features(rows, index, num_previous)
+				"""
+				Choose between the number of fatalities or whether any
+				fatalities occurred as a label
+				"""
 # 				label = min(1, num_fatalities)
 				label = np.round(num_fatalities * events_per_month)
 				X.append(training_point)
 				Y.append(label)
-	
+		
+		# prepare column names
 		final_columns = []
 		for num in range(num_previous):
 			for name in column_names:
 				final_columns.append("prev#" + str(num+1) + " " + name)
-	
+		
+		# randomly create train and test set
 		XY = zip(X,Y)
 		random.seed(0)
 		random.shuffle(XY)
@@ -329,6 +538,10 @@ def main():
 		svmclf.fit(train_data, train_labels)
 
 		print("Building tree from SVM classifier...")
+		"""
+		Choose whether to use a classifier or regressor, dependent on the label
+		being a boolean or real value
+		"""
 # 		dt = tree.DecisionTreeClassifier(max_depth=3)
 		dt = tree.DecisionTreeRegressor(max_depth=3)
 		dt = dt.fit(train_data, svmclf.predict(train_data))
@@ -337,7 +550,12 @@ def main():
 		graph.render(str(num_previous) + "prev")
 		
 		print get_tree_json(dot_data)
-
+		
+		"""
+		Testing code for classification (determining whether the next event
+		will have any fatalities
+		Note: currently only works with 0/1 classification testing
+		"""
 # 		print("Testing...")
 # 		svm_test_pred = svmclf.predict(test_data)
 # 		svm_test_pred = np.array(svm_test_pred)

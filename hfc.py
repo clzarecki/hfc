@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import csv
 import datetime
 import graphviz
@@ -28,7 +31,7 @@ ignored_features = ['GWNO', 'EVENT_ID_CNTY', 'EVENT_ID_NO_CNTY',
 def get_feature_names(filename):
 	"""Get feature names from a csv file
 	Arguments:
-	filename ­­ the path/name of the csv file
+	filename -- the path/name of the csv file
 	Returns:
 	A list of strings as feature names
 	"""
@@ -41,7 +44,7 @@ def get_feature_names(filename):
 def date_str_to_int(date_str):
 	"""Convert a date string to days since 1/1/1997
 	Arguments:
-	date_str ­­ date as a string in MM/DD/YYYY format
+	date_str -- date as a string in MM/DD/YYYY format
 	Returns:
 	an integer of the number of days since 1/1/1997
 	"""
@@ -53,7 +56,7 @@ def date_str_to_int(date_str):
 def int_to_date(num_days):
 	"""Convert num of days since 1/1/1997 to a date
 	Arguments:
-	num_days ­­ number of days since 1/1/1997 as an integer
+	num_days -- number of days since 1/1/1997 as an integer
 	Returns:
 	The converted date object
 	"""
@@ -73,7 +76,7 @@ def num_months_between_dates(date1, date2):
 def num_events_per_month(events):
 	"""Calculate the average number of events per month from a list of events
 	Arguments:
-	events ­­ a list of events, in order by date
+	events -- a list of events, in order by date
 	Returns:
 	The average number of events per month, as a float
 	"""
@@ -90,7 +93,7 @@ def get_features_and_possible_values(filename):
 	get values for are in the final_features list. The EVENT_DATE feature is
 	converted to an integer.
 	Arguments:
-	filename ­­ the path/name of the csv file
+	filename -- the path/name of the csv file
 	Returns:
 	A dictionary of lists, with key as feature name and value as a list of
 	strings or integers, in sorted order
@@ -118,7 +121,7 @@ def get_features_and_possible_values(filename):
 def feature_is_numeric(possible_values):
 	"""Determines if a feature is numeric, depending on feature values
 	Arguments:
-	possible_values ­­ a dictionary of feature name to list of values a feature
+	possible_values -- a dictionary of feature name to list of values a feature
 	can take
 	Returns:
 	A dictionary of feature name to boolean, True if all possible feature
@@ -137,7 +140,7 @@ def feature_is_numeric(possible_values):
 def max_min_vals(possible_values, feature_numeric):
 	"""Finds the maximum and minimum value for each numeric feature
 	Arguments:
-	possible_values ­­ a dictionary of feature name to list of values a feature
+	possible_values -- a dictionary of feature name to list of values a feature
 	can take
 	feature_numeric -- a dictionary of feature name to boolean, whether or not
 	a feature is numeric
@@ -161,7 +164,7 @@ def normalize_feature_names(feature_names, feature_is_numeric, possible_values):
 	features just get the feature name. Discrete-valued features are expanded
 	to a list of one-hot features, formatted as FEAT_NAME=VALUE
 	Arguments:
-	feature_names ­­ a list of feature names as strings
+	feature_names -- a list of feature names as strings
 	feature_is_numeric -- a dictionary of string feature names to boolean
 	values, whether or not a given feature is numeric
 	possible_values -- a dictionary of string feature names to list of sorted
@@ -184,7 +187,7 @@ def normalize_feature_names(feature_names, feature_is_numeric, possible_values):
 def normalize_feature(value, feature_is_numeric, possible_values, min, max):
 	"""Normalizes a feature value to be between 0 and 1
 	Arguments:
-	value ­­ the given feature value
+	value -- the given feature value
 	feature_is_numeric -- True if the feature from the given value is numeric
 	possible values -- a sorted list of possble values from the feature the
 	value came from
@@ -215,7 +218,7 @@ def get_row_normalized(row, features, features_numeric, possible_values,
 		min_vals, max_vals):
 	"""Normalizes a row so all values are between 0 and 1
 	Arguments:
-	row ­­ raw values from the event
+	row -- raw values from the event
 	features -- a list of features to include
 	features_numeric -- a dictionary of string feature names to boolean
 	values, whether or not a given feature is numeric
@@ -547,7 +550,10 @@ def main():
 		dt = dt.fit(train_data, svmclf.predict(train_data))
 		dot_data = tree.export_graphviz(dt, out_file=None,feature_names=final_columns,class_names=["Fatalities=0","Fatalities>=1"],impurity=False)
 		graph = graphviz.Source(dot_data)
-		graph.render(str(num_previous) + "prev")
+		"""
+		Use the following line to ceate a pdf of the tree
+		"""
+		#graph.render(str(num_previous) + "prev")
 		
 		print get_tree_json(dot_data)
 		
